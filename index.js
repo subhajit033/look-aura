@@ -8,10 +8,7 @@ const ACCESS_TOKEN = process.env.ACCESS_TOKEN
 const jwt = require("jsonwebtoken");
 
 
-app.use(cors({
-    origin: "*",
-    methods: ["GET", "POST", "PUT","PATCH","DELETE"]
-}));
+app.use(cors());
 app.use(express.json());
 
 const uri = `mongodb+srv://${process.env.DB_NAME}:${process.env.DB_PASSWORD}@cluster0.wxzkvmx.mongodb.net/?retryWrites=true&w=majority`;
