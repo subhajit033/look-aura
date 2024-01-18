@@ -51,6 +51,7 @@ const run = async () => {
     const Users = client.db("Client1").collection("Users");
     const Packages = client.db("Client1").collection("Package");
     const Payments= client.db("Client1").collection("Payment");
+    const Carts= client.db("Client1").collection("Cart");
     try {
 
         const verifyAdmin = async (req, res, next) => {
@@ -231,7 +232,7 @@ const run = async () => {
             res.send(result);
         })
 
-        app.post('/specificDesignApproval', verifyJWT, verifyAdmin, async (req, res) => {
+        app.post('/specificDesignApproval', verifyJWT, async (req, res) => {
             const id = req.body.id;
             const result = await AllDesigns.findOne({ _id: new ObjectId(id) });
             res.send(result);
