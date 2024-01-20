@@ -50,8 +50,9 @@ const run = async () => {
     const AllDesigns = client.db("Client1").collection("AllDesigns");
     const Users = client.db("Client1").collection("Users");
     const Packages = client.db("Client1").collection("Package");
-    const Payments= client.db("Client1").collection("Payment");
-    const Carts= client.db("Client1").collection("Cart");
+    const Payments = client.db("Client1").collection("Payment");
+    const Carts = client.db("Client1").collection("Cart");
+    const Tags = client.db("Client1").collection("Tag");
     try {
 
         const verifyAdmin = async (req, res, next) => {
@@ -103,27 +104,27 @@ const run = async () => {
             }
         });
 
-        app.put('/updateUser', verifyJWT, verifyAdmin, async(req, res)=>{
+        app.put('/updateUser', verifyJWT, verifyAdmin, async (req, res) => {
             console.log("updateUser", req.body);
             const email = req.body.email;
-            const filter = {email: email};
-            const updatedDoc= {
-                $set:{
+            const filter = { email: email };
+            const updatedDoc = {
+                $set: {
                     ...req.body
                 }
             };
-            const option = {upsert: true};
+            const option = { upsert: true };
             const result = await Users.updateOne(filter, updatedDoc, option);
             res.send(result);
         })
 
-        app.delete('/deleteUser', verifyJWT, verifyAdmin, async(req, res)=>{
+        app.delete('/deleteUser', verifyJWT, verifyAdmin, async (req, res) => {
             console.log("delete", req.body);
             const email = req.query.user;
-            const result = await Users.deleteOne({email});
+            const result = await Users.deleteOne({ email });
             res.send(result);
         })
-        
+
 
         app.post("/addDesign", async (req, res) => {
             console.log(req.body);
@@ -141,16 +142,16 @@ const run = async () => {
             }
         })
 
-        app.put('/changePassword', verifyJWT, forbiddenAccess, async(req, res)=>{
+        app.put('/changePassword', verifyJWT, forbiddenAccess, async (req, res) => {
             console.log("change password", req.query.user);
             const email = req.query.user;
-            const filter = {email: email};
-            const updatedDoc= {
+            const filter = { email: email };
+            const updatedDoc = {
                 $set: {
                     ...req.body
                 }
             };
-            const option= {upsert: true};
+            const option = { upsert: true };
             const result = await Users.updateOne(filter, updatedDoc, option);
             res.send(result);
         })
@@ -224,11 +225,11 @@ const run = async () => {
 
         app.post('/specificUnApprovedItems', verifyJWT, verifyAdmin, async (req, res) => {
             const email = req.body.email;
-            const findEmail = await Users.findOne({email: email});
-            if(!findEmail){
+            const findEmail = await Users.findOne({ email: email });
+            if (!findEmail) {
                 return res.send(findEmail)
             }
-            const result = await AllDesigns.find({$and: [{ uploaderEmail: email }, {isApproved: false}, {isRejected: {$ne: true}}]}).toArray();
+            const result = await AllDesigns.find({ $and: [{ uploaderEmail: email }, { isApproved: false }, { isRejected: { $ne: true } }] }).toArray();
             res.send(result);
         })
 
@@ -253,18 +254,41 @@ const run = async () => {
 
         app.get("/allDesignsForAdmin", verifyJWT, verifyAdmin, async (req, res) => {
             const email = req.decoded.email;
-            let result = await AllDesigns.find({ $and: [{ isApproved: true }, { isSold: false }] }).toArray();
-            result.forEach(element=>{
-                let findEmail= element.likes.filter(data=>data.email===email);
-                if(findEmail.length!==0){
-                    element.personReaction= true
-                }
-            })
-            console.log(result);
-            res.send(result);
+            let search = req.query.search;
+            if(search===""){
+                let result = await AllDesigns.find({ $and: [{ isApproved: true }, { isSold: false }] }).toArray();
+                result.forEach(element => {
+                    let findEmail = element.likes.filter(data => data.email === email);
+                    if (findEmail.length !== 0) {
+                        element.personReaction = true
+                    }
+                })
+                // console.log(result);
+                return res.send(result);
+            }
+            else{
+                let result = await AllDesigns.find({ $and: [{ isApproved: true }, { isSold: false }] }).toArray();
+                let filteredData=[]
+                result.forEach(element => {
+                    let findTag= element.tags.filter(data=>data===search);
+                    if(findTag.length!==0){
+                        let findEmail = element.likes.filter(data => data.email === email);
+                        if (findEmail.length !== 0) {
+                            element.personReaction = true
+                        }
+                        filteredData.push(element);
+                    }
+                    
+                    
+                })
+                result = [...filteredData];
+                // console.log(result);
+                return res.send(result);
+            }
+            
         })
 
-        app.get('/myDesigns',verifyJWT, verifyDesigner, async (req, res) => {
+        app.get('/myDesigns', verifyJWT, verifyDesigner, async (req, res) => {
             const email = req.decoded.email;
             let result = await AllDesigns.find({ $and: [{ uploaderEmail: email }, { isApproved: true }] }).toArray();
             result.forEach(element => {
@@ -303,8 +327,38 @@ const run = async () => {
 
         app.get("/viewAllDesigns", verifyJWT, async (req, res) => {
             const email = req.decoded.email;
-            const result = await AllDesigns.find({ $and: [{ isApproved: true }, { isSold: false }] }).toArray();
-            res.send(result);
+            let search = req.query.search;
+            if (search === "") {
+                let result = await AllDesigns.find({ $and: [{ isApproved: true }, { isSold: false }] }).toArray();
+                result.forEach(element => {
+                    let findEmail = element.likes.filter(data => data.email === email);
+                    if (findEmail.length !== 0) {
+                        element.personReaction = true
+                    }
+                })
+                // console.log(result);
+                return res.send(result);
+            }
+            else {
+                let result = await AllDesigns.find({ $and: [{ isApproved: true }, { isSold: false }] }).toArray();
+                let filteredData = []
+                result.forEach(element => {
+                    let findTag = element.tags.filter(data => data === search);
+                    if (findTag.length !== 0) {
+                        let findEmail = element.likes.filter(data => data.email === email);
+                        if (findEmail.length !== 0) {
+                            element.personReaction = true
+                        }
+                        filteredData.push(element);
+                    }
+
+
+                })
+                result = [...filteredData];
+                return res.send(result);
+            }
+            // const result = await AllDesigns.find({ $and: [{ isApproved: true }, { isSold: false }] }).toArray();
+            // res.send(result);
         })
 
         app.get('/adminStatistics', verifyJWT, verifyAdmin, async (req, res) => {
@@ -321,27 +375,27 @@ const run = async () => {
             let totalRejected = 0;
             let totalSold = 0;
             let totalUnsold = 0;
-            AllUser.forEach(element=>{
-                if(element.role==='designer'){
-                    totalDesigner+=1;
+            AllUser.forEach(element => {
+                if (element.role === 'designer') {
+                    totalDesigner += 1;
                 }
-                if(element.role==='store'){
-                    totalShops+=1;
+                if (element.role === 'store') {
+                    totalShops += 1;
                 }
-                if(element.isPaid){
-                    PaidShops+=1;
+                if (element.isPaid) {
+                    PaidShops += 1;
                 }
-                if(!element.isPaid && element.role==="store"){
-                    UnpaidShops+=1;
+                if (!element.isPaid && element.role === "store") {
+                    UnpaidShops += 1;
                 }
-                
+
             });
-            AllDesignerPost.forEach((element)=>{
-                if(element.isApproved){
-                    totalApproveDesigns+=1;
+            AllDesignerPost.forEach((element) => {
+                if (element.isApproved) {
+                    totalApproveDesigns += 1;
                 }
-                if(!element.isApproved){
-                    totalUnapproved+=1
+                if (!element.isApproved) {
+                    totalUnapproved += 1
                 }
                 if (element.isRejected) {
                     totalRejected += 1;
@@ -353,33 +407,49 @@ const run = async () => {
                     totalUnsold += 1;
                 }
             })
-            res.send({totalUsers, totalDesigner, totalShops, PaidShops, UnpaidShops, totalDesigns, totalApproveDesigns, totalUnapproved, totalUnsold, totalSold, totalRejected})
+            res.send({ totalUsers, totalDesigner, totalShops, PaidShops, UnpaidShops, totalDesigns, totalApproveDesigns, totalUnapproved, totalUnsold, totalSold, totalRejected })
         })
 
-        app.post('/postPackage', verifyJWT, verifyAdmin, async(req, res)=>{
-            console.log(req.body);
-            const result = await Packages.insertOne({...req.body})
+        app.post('/postPackage', verifyJWT, verifyAdmin, async (req, res) => {
+            // console.log(req.body);
+            const result = await Packages.insertOne({ ...req.body })
             res.send(result);
         })
 
-        app.put('/productReaction', verifyJWT, async(req, res)=>{
+        app.put('/productReaction', verifyJWT, async (req, res) => {
             const id = req.query.id
-            const filter = {_id: new ObjectId(id)};
+            const filter = { _id: new ObjectId(id) };
+            console.log(req.body);
             const updatedDoc = {
                 $set: {
                     ...req.body
                 }
             }
-            const option = {upsert: true};
+            const option = { upsert: true };
             const result = await AllDesigns.updateOne(filter, updatedDoc, option);
             res.send(result);
         })
 
-        app.get('/allPackage', verifyJWT, async(req, res)=>{
+        app.get('/allPackage', verifyJWT, async (req, res) => {
             const result = await Packages.find({}).toArray();
             res.send(result);
         })
 
+        app.get('/allTag', verifyJWT, async (req, res) => {
+            const result = await Tags.find({}).toArray();
+            res.send(result);
+        })
+
+        app.post('/addTag', verifyJWT, verifyAdmin, async (req, res) => {
+            const result = await Tags.insertOne({ ...req.body });
+            res.send(result);
+        })
+
+        app.delete("/delete-tag", verifyJWT, verifyAdmin, async (req, res) => {
+            const name = req.query.name;
+            const result = await Tags.deleteOne({ name: name });
+            res.send(result);
+        })
     }
     finally {
 
