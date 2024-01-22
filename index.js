@@ -6,10 +6,14 @@ require('dotenv').config();
 const { MongoClient, ServerApiVersion, ObjectId } = require('mongodb');
 const ACCESS_TOKEN = process.env.ACCESS_TOKEN
 const jwt = require("jsonwebtoken");
-
+const razorpay = require("razorpay");
+const Razorpay = require("razorpay");
+const crypto= require("crypto");
+const { request } = require("http");
 
 app.use(cors());
 app.use(express.json());
+app.use(express.urlencoded({extended: false}));
 
 const uri = `mongodb+srv://${process.env.DB_NAME}:${process.env.DB_PASSWORD}@cluster0.wxzkvmx.mongodb.net/?retryWrites=true&w=majority`;
 
@@ -448,6 +452,89 @@ const run = async () => {
         app.delete("/delete-tag", verifyJWT, verifyAdmin, async (req, res) => {
             const name = req.query.name;
             const result = await Tags.deleteOne({ name: name });
+            res.send(result);
+        })
+
+        app.post('/order', verifyJWT,  async(req, res)=>{
+            // console.log(req.body);
+            try{
+                const razorpay = new Razorpay({
+                    key_id: process.env.RP_KEY,
+                    key_secret: process.env.RP_SECRET
+                });
+
+                const getData= await Packages.findOne({_id: new ObjectId(req.body._id)})
+
+                const options = {currency: "INR", amount: parseInt(getData?.price)*100, receipt: new ObjectId().toString()};
+                console.log(options);
+                const order = await razorpay.orders.create(options);
+                if (!order) {
+                    return res.status(404).send({ message: "Error" });
+                }
+                return res.send(order);
+            }
+            catch(error){
+                console.log(error);
+            }
+            
+            
+        })
+
+        app.post("/order/validate", verifyJWT, async(req, res)=>{
+            const sha = crypto.createHmac("sha256", process.env.RP_SECRET);
+            sha.update(`${req.body.order_id}|${req.body.paymentId}`);
+            const digest = sha.digest("hex");
+            if(digest=== req.body.signature){
+                const filter = {email: req.body.email};
+                const updatedDoc= {
+                    $set: {
+                        isPaid: true,
+                        coins: parseInt(req.body.packageCoins)+parseInt(req.body.currentCoins)
+                    }
+                }
+                const option = {upsert: true};
+                const updateUser= await Users.updateOne(filter, updatedDoc, option);
+                if(updateUser?.modifiedCount>=1){
+                    const result = await Payments.insertOne({...req.body});
+                    return res.send(result);
+                }
+            }
+            else{
+                return res.status(400).send({message: "Invalid payment"});
+            }
+        })
+
+        app.get("/allPayment", verifyJWT, verifyAdmin, async(req, res)=>{
+            const result = await Payments.find({}).toArray();
+            res.send(result);
+        })
+
+        app.put('/updateProduct', verifyJWT, async(req, res)=>{
+            console.log(req.body)
+            const filter = {_id: new ObjectId(req.body._id)};
+            const updatedDoc= {
+                $set: {
+                    isSold: req.body.isSold,
+                    buyerEmail: req.body.buyerEmail,
+                }
+            };
+            const option= {upsert: true};
+
+            const result = await AllDesigns.updateOne(filter, updatedDoc, option);
+            if(result){
+                const updatedDoc= {
+                    $set: {
+                        coins: req.body.remainingCoins
+                    }
+                }
+                const option= {upsert: true};
+                const userCoinsUpdate= await Users.updateOne({email: req.decoded.email}, updatedDoc, option);
+            }
+            res.send(result)
+        });
+
+        app.get('/allCart', verifyJWT, async(req, res)=>{
+            const result = await AllDesigns.find({$and: [{isSold: true}, {buyerEmail: req.decoded.email}]}).toArray();
             res.send(result);
         })
     }
