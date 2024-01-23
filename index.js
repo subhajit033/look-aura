@@ -130,7 +130,7 @@ const run = async () => {
         })
 
 
-        app.post("/addDesign", async (req, res) => {
+        app.post("/addDesign", verifyJWT, verifyDesigner, async (req, res) => {
             console.log(req.body);
             const result = await AllDesigns.insertOne({ ...req.body });
             res.send(result);
@@ -147,7 +147,6 @@ const run = async () => {
         })
 
         app.put('/changePassword', verifyJWT, forbiddenAccess, async (req, res) => {
-            console.log("change password", req.query.user);
             const email = req.query.user;
             const filter = { email: email };
             const updatedDoc = {
