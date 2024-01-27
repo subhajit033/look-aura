@@ -9,10 +9,13 @@ const jwt = require("jsonwebtoken");
 const razorpay = require("razorpay");
 const Razorpay = require("razorpay");
 const crypto= require("crypto");
-const { request } = require("http");
+// const path = require("path");
 
 app.use(cors());
+// const _dirname= path.dirname("");
+// const buildPath= path.join(_dirname, "../my-app/build");
 app.use(express.json());
+// app.use(express.static(buildPath));
 app.use(express.urlencoded({extended: false}));
 
 const uri = `mongodb+srv://${process.env.DB_NAME}:${process.env.DB_PASSWORD}@cluster0.wxzkvmx.mongodb.net/?retryWrites=true&w=majority`;
@@ -123,7 +126,6 @@ const run = async () => {
         })
 
         app.delete('/deleteUser', verifyJWT, verifyAdmin, async (req, res) => {
-            console.log("delete", req.body);
             const email = req.query.user;
             const result = await Users.deleteOne({ email });
             res.send(result);
@@ -273,7 +275,7 @@ const run = async () => {
                 let result = await AllDesigns.find({ $and: [{ isApproved: true }, { isSold: false }] }).toArray();
                 let filteredData=[]
                 result.forEach(element => {
-                    let findTag= element.tags.filter(data=>data===search);
+                    let findTag= element.tags.filter(data=>data.name===search);
                     if(findTag.length!==0){
                         let findEmail = element.likes.filter(data => data.email === email);
                         if (findEmail.length !== 0) {
@@ -315,7 +317,7 @@ const run = async () => {
                     approvedCount += 1;
                 }
                 if (!element.isApproved) {
-                    unApprovedCount += 1
+                    unApprovedCount += 1;
                 }
                 if (element.isRejected) {
                     rejectedCount += 1;
@@ -346,7 +348,7 @@ const run = async () => {
                 let result = await AllDesigns.find({ $and: [{ isApproved: true }, { isSold: false }] }).toArray();
                 let filteredData = []
                 result.forEach(element => {
-                    let findTag = element.tags.filter(data => data === search);
+                    let findTag = element.tags.filter(data => data.name === search);
                     if (findTag.length !== 0) {
                         let findEmail = element.likes.filter(data => data.email === email);
                         if (findEmail.length !== 0) {
