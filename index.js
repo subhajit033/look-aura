@@ -9,14 +9,14 @@ const jwt = require("jsonwebtoken");
 const razorpay = require("razorpay");
 const Razorpay = require("razorpay");
 const crypto= require("crypto");
-// const path = require("path");
+const path = require("path");
 
 app.use(cors());
 // const _dirname= path.dirname("");
 // const buildPath= path.join(_dirname, "../my-app/build");
 app.use(express.json());
-// app.use(express.static(buildPath));
-app.use(express.urlencoded({extended: false}));
+// app.use(express.static(buildPath)); //If you want to run the frontend and backend simultaneously in a single port then remove this line from comment.
+// app.use(express.urlencoded({extended: false}));
 
 const uri = `mongodb+srv://${process.env.DB_NAME}:${process.env.DB_PASSWORD}@cluster0.wxzkvmx.mongodb.net/?retryWrites=true&w=majority`;
 
@@ -44,6 +44,7 @@ const verifyJWT = (req, res, next) => {
 }
 
 const forbiddenAccess = (req, res, next) => {
+    console.log(req.query.user, req.query.user=== req.decoded.email);
     if (req.decoded.email === req.query.user) {
         next();
     }
@@ -99,7 +100,7 @@ const run = async () => {
 
 
 
-        app.post("/addUser", verifyJWT, verifyAdmin, async (req, res) => {
+        app.post("/addUser", verifyJWT, verifyAdmin,  async (req, res) => {
             const email = req.body.email;
             const findEmail = await Users.findOne({ email: email });
             if (findEmail) {
@@ -112,7 +113,7 @@ const run = async () => {
         });
 
         app.put('/updateUser', verifyJWT, verifyAdmin, async (req, res) => {
-            console.log("updateUser", req.body);
+            // console.log("updateUser", req.body);
             const email = req.body.email;
             const filter = { email: email };
             const updatedDoc = {
@@ -148,7 +149,7 @@ const run = async () => {
             }
         })
 
-        app.put('/changePassword', verifyJWT, forbiddenAccess, async (req, res) => {
+        app.put('/changePassword', verifyJWT,  async (req, res) => {
             const email = req.query.user;
             const filter = { email: email };
             const updatedDoc = {
@@ -424,7 +425,7 @@ const run = async () => {
         app.put('/productReaction', verifyJWT, async (req, res) => {
             const id = req.query.id
             const filter = { _id: new ObjectId(id) };
-            console.log(req.body);
+            // console.log(req.body);
             const updatedDoc = {
                 $set: {
                     ...req.body
@@ -511,7 +512,7 @@ const run = async () => {
         })
 
         app.put('/updateProduct', verifyJWT, async(req, res)=>{
-            console.log(req.body)
+            // console.log(req.body)
             const filter = {_id: new ObjectId(req.body._id)};
             const updatedDoc= {
                 $set: {
@@ -537,6 +538,10 @@ const run = async () => {
         app.get('/allCart', verifyJWT, async(req, res)=>{
             const result = await AllDesigns.find({$and: [{isSold: true}, {buyerEmail: req.decoded.email}]}).toArray();
             res.send(result);
+        })
+
+        app.post("/postSubscription", async(req, res)=>{
+            console.log(req.body);
         })
     }
     finally {
