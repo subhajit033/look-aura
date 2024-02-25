@@ -8,7 +8,7 @@ const ACCESS_TOKEN = process.env.ACCESS_TOKEN
 const jwt = require("jsonwebtoken");
 const razorpay = require("razorpay");
 const Razorpay = require("razorpay");
-const crypto= require("crypto");
+const crypto = require("crypto");
 const path = require("path");
 
 app.use(cors());
@@ -44,7 +44,7 @@ const verifyJWT = (req, res, next) => {
 }
 
 const forbiddenAccess = (req, res, next) => {
-    console.log(req.query.user, req.query.user=== req.decoded.email);
+    console.log(req.query.user, req.query.user === req.decoded.email);
     if (req.decoded.email === req.query.user) {
         next();
     }
@@ -61,6 +61,7 @@ const run = async () => {
     const Payments = client.db("Client1").collection("Payment");
     const Carts = client.db("Client1").collection("Cart");
     const Tags = client.db("Client1").collection("Tag");
+    const Subscription = client.db("Client1").collection("Subscription");
     try {
 
         const verifyAdmin = async (req, res, next) => {
@@ -100,7 +101,7 @@ const run = async () => {
 
 
 
-        app.post("/addUser", verifyJWT, verifyAdmin,  async (req, res) => {
+        app.post("/addUser", verifyJWT, verifyAdmin, async (req, res) => {
             const email = req.body.email;
             const findEmail = await Users.findOne({ email: email });
             if (findEmail) {
@@ -140,8 +141,23 @@ const run = async () => {
         })
 
         app.post('/login', async (req, res) => {
-            const result = await Users.findOne({ $and: [{ email: { $eq: req.body.email } }, { password: { $eq: req.body.password } }] })
+            let result = await Users.findOne({ $and: [{ email: { $eq: req.body.email } }, { password: { $eq: req.body.password } }] })
             if (result) {
+                if (result?.role === 'store' && result?.region) {
+                    let currentDate = new Date().toLocaleDateString("en-US", {
+                        timeZone: result?.region
+                    }).split('/');
+                    let tempDate = parseInt(currentDate[1]);
+                    let tempMonth = parseInt(currentDate[0]);
+                    let tempYear = parseInt(currentDate[2]);
+                    if ((tempYear > subscriptionYear && tempMonth > subscriptionMonth && tempDate > subscriptionDate) || (tempYear === subscriptionYear && tempMonth > subscriptionMonth) || (tempYear === subscriptionYear && tempMonth === subscriptionMonth && tempDate > subscriptionDate)) {
+                        result.subscription = false;
+                    }
+                    else {
+                        result.subscription = true;
+                    }
+                }
+                // console.log('login',result);
                 return res.send({ result: { ...result } });
             }
             else {
@@ -149,7 +165,7 @@ const run = async () => {
             }
         })
 
-        app.put('/changePassword', verifyJWT,  async (req, res) => {
+        app.put('/changePassword', verifyJWT, async (req, res) => {
             const email = req.query.user;
             const filter = { email: email };
             const updatedDoc = {
@@ -189,8 +205,28 @@ const run = async () => {
                     return res.send({ user: false });
                 }
                 const email = decoded.email;
-                const result = await Users.findOne({ email: email });
+                let result = await Users.findOne({ email: email });
                 if (result) {
+                    if (result?.role === 'store' && result?.region) {
+                        let currentDate = new Date().toLocaleDateString("en-US", {
+                            timeZone: result?.region
+                        }).split('/');
+                        let tempDate = parseInt(currentDate[1]);
+                        let tempMonth = parseInt(currentDate[0]);
+                        let tempYear = parseInt(currentDate[2]);
+                        const subscriptionDate = parseInt(result.subscriptionOut.split('/')[1])
+                        const subscriptionMonth = parseInt(result.subscriptionOut.split('/')[0])
+                        const subscriptionYear = parseInt(result.subscriptionOut.split('/')[2])
+                        if((tempYear >subscriptionYear && tempMonth> subscriptionMonth && tempDate> subscriptionDate) || (tempYear=== subscriptionYear && tempMonth> subscriptionMonth) || (tempYear=== subscriptionYear && tempMonth=== subscriptionMonth && tempDate>subscriptionDate)){
+                            result.subscription= false;
+                        }
+                        else{
+                            result.subscription= true;
+                        }
+                        // console.log(tempDate, tempMonth,subscriptionDate, 220);
+                        
+                        // console.log(result);
+                    }
                     return res.send({ user: result });
                 }
                 else {
@@ -261,7 +297,7 @@ const run = async () => {
         app.get("/allDesignsForAdmin", verifyJWT, verifyAdmin, async (req, res) => {
             const email = req.decoded.email;
             let search = req.query.search;
-            if(search===""){
+            if (search === "") {
                 let result = await AllDesigns.find({ $and: [{ isApproved: true }, { isSold: false }] }).toArray();
                 result.forEach(element => {
                     let findEmail = element.likes.filter(data => data.email === email);
@@ -272,26 +308,26 @@ const run = async () => {
                 // console.log(result);
                 return res.send(result);
             }
-            else{
+            else {
                 let result = await AllDesigns.find({ $and: [{ isApproved: true }, { isSold: false }] }).toArray();
-                let filteredData=[]
+                let filteredData = []
                 result.forEach(element => {
-                    let findTag= element.tags.filter(data=>data.name===search);
-                    if(findTag.length!==0){
+                    let findTag = element.tags.filter(data => data.name === search);
+                    if (findTag.length !== 0) {
                         let findEmail = element.likes.filter(data => data.email === email);
                         if (findEmail.length !== 0) {
                             element.personReaction = true
                         }
                         filteredData.push(element);
                     }
-                    
-                    
+
+
                 })
                 result = [...filteredData];
                 // console.log(result);
                 return res.send(result);
             }
-            
+
         })
 
         app.get('/myDesigns', verifyJWT, verifyDesigner, async (req, res) => {
@@ -457,91 +493,153 @@ const run = async () => {
             res.send(result);
         })
 
-        app.post('/order', verifyJWT,  async(req, res)=>{
+        app.post('/order', verifyJWT, async (req, res) => {
             // console.log(req.body);
-            try{
+            try {
                 const razorpay = new Razorpay({
                     key_id: process.env.RP_KEY,
                     key_secret: process.env.RP_SECRET
                 });
 
-                const getData= await Packages.findOne({_id: new ObjectId(req.body._id)})
+                const getData = await Packages.findOne({ _id: new ObjectId(req.body._id) })
 
-                const options = {currency: "INR", amount: parseInt(getData?.price)*100, receipt: new ObjectId().toString()};
-                console.log(options);
+                const options = { currency: "INR", amount: parseInt(getData?.price) * 100, receipt: new ObjectId().toString() };
+                // console.log(options);
                 const order = await razorpay.orders.create(options);
                 if (!order) {
                     return res.status(404).send({ message: "Error" });
                 }
                 return res.send(order);
             }
-            catch(error){
+            catch (error) {
                 console.log(error);
             }
-            
-            
+
+
         })
 
-        app.post("/order/validate", verifyJWT, async(req, res)=>{
+        app.post("/order/validate", verifyJWT, async (req, res) => {
             const sha = crypto.createHmac("sha256", process.env.RP_SECRET);
             sha.update(`${req.body.order_id}|${req.body.paymentId}`);
             const digest = sha.digest("hex");
-            if(digest=== req.body.signature){
-                const filter = {email: req.body.email};
-                const updatedDoc= {
+            if (digest === req.body.signature) {
+                const filter = { email: req.body.email };
+                const updatedDoc = {
                     $set: {
                         isPaid: true,
-                        coins: parseInt(req.body.packageCoins)+parseInt(req.body.currentCoins)
+                        coins: parseInt(req.body.packageCoins) + parseInt(req.body.currentCoins)
                     }
                 }
-                const option = {upsert: true};
-                const updateUser= await Users.updateOne(filter, updatedDoc, option);
-                if(updateUser?.modifiedCount>=1){
-                    const result = await Payments.insertOne({...req.body});
+                const option = { upsert: true };
+                const updateUser = await Users.updateOne(filter, updatedDoc, option);
+                if (updateUser?.modifiedCount >= 1) {
+                    const result = await Payments.insertOne({ ...req.body });
                     return res.send(result);
                 }
             }
-            else{
-                return res.status(400).send({message: "Invalid payment"});
+            else {
+                return res.status(400).send({ message: "Invalid payment" });
             }
         })
 
-        app.get("/allPayment", verifyJWT, verifyAdmin, async(req, res)=>{
+        app.get("/allPayment", verifyJWT, verifyAdmin, async (req, res) => {
             const result = await Payments.find({}).toArray();
             res.send(result);
         })
 
-        app.put('/updateProduct', verifyJWT, async(req, res)=>{
+        app.put('/updateProduct', verifyJWT, async (req, res) => {
             // console.log(req.body)
-            const filter = {_id: new ObjectId(req.body._id)};
-            const updatedDoc= {
+            const filter = { _id: new ObjectId(req.body._id) };
+            const updatedDoc = {
                 $set: {
                     isSold: req.body.isSold,
                     buyerEmail: req.body.buyerEmail,
                 }
             };
-            const option= {upsert: true};
+            const option = { upsert: true };
 
             const result = await AllDesigns.updateOne(filter, updatedDoc, option);
-            if(result){
-                const updatedDoc= {
+            if (result) {
+                const updatedDoc = {
                     $set: {
                         coins: req.body.remainingCoins
                     }
                 }
-                const option= {upsert: true};
-                const userCoinsUpdate= await Users.updateOne({email: req.decoded.email}, updatedDoc, option);
+                const option = { upsert: true };
+                const userCoinsUpdate = await Users.updateOne({ email: req.decoded.email }, updatedDoc, option);
             }
             res.send(result)
         });
 
-        app.get('/allCart', verifyJWT, async(req, res)=>{
-            const result = await AllDesigns.find({$and: [{isSold: true}, {buyerEmail: req.decoded.email}]}).toArray();
+        app.get('/allCart', verifyJWT, async (req, res) => {
+            const result = await AllDesigns.find({ $and: [{ isSold: true }, { buyerEmail: req.decoded.email }] }).toArray();
             res.send(result);
         })
 
-        app.post("/postSubscription", async(req, res)=>{
+        app.post("/postSubscription", verifyJWT, async (req, res) => {
             console.log(req.body);
+            const result = await Subscription.insertOne({ ...req.body });
+            res.send(result);
+        })
+
+        app.get('/getSubscriptions', verifyJWT, async (req, res) => {
+            const result = await Subscription.find({}).toArray();
+            res.send(result);
+        })
+
+        app.delete('/deleteSubscription', verifyJWT, verifyAdmin, async (req, res) => {
+            const id = req.query.id;
+            const result = await Subscription.deleteOne({ _id: new ObjectId(id) });
+            res.send(result);
+        });
+
+        app.post('/createSubscriptionOrder', verifyJWT, async (req, res) => {
+            console.log(req.body);
+
+            try {
+                const razorpay = new Razorpay({
+                    key_id: process.env.RP_KEY,
+                    key_secret: process.env.RP_SECRET
+                });
+
+                const options = { currency: "INR", amount: parseInt(req.body.fees) * 100, receipt: new ObjectId().toString() };
+                // console.log(options);
+                const order = await razorpay.orders.create(options);
+                if (!order) {
+                    return res.status(404).send({ message: "Error" });
+                }
+                return res.send(order);
+            }
+            catch (error) {
+                console.log(error);
+            }
+        })
+
+        app.post("/subscriptionValidate", verifyJWT, async (req, res) => {
+            // console.log(req.body);
+            const sha = crypto.createHmac("sha256", process.env.RP_SECRET);
+            sha.update(`${req.body.order_id}|${req.body.paymentId}`);
+            const digest = sha.digest("hex");
+            if (digest === req.body.signature) {
+                const filter = { email: req.body.email };
+                const updatedDoc = {
+                    $set: {
+                        isPaid: true,
+                        subscriptionOut: req.body.subscriptionOut,
+                        region: req.body.region,
+                        coins: parseInt(req.body.packageCoins) + parseInt(req.body.currentCoins)
+                    }
+                }
+                const option = { upsert: true };
+                const updateUser = await Users.updateOne(filter, updatedDoc, option);
+                if (updateUser?.modifiedCount >= 1) {
+                    const result = await Payments.insertOne({ order_id: req.body.order_id, signature: req.body.signature, paymentId: req.body.paymentId, email: req.body.email, timeMili: req.body.timeMili, date: req.body.date, time: req.body.time, packagePrice: req.body.packagePrice, packageCoins: req.body.packageCoins, phone_number: req.body.phone_number, username: req.body.username, currentCoins: req.body.currentCoins });
+                    return res.send(result);
+                }
+            }
+            else {
+                return res.status(400).send({ message: "Invalid payment" });
+            }
         })
     }
     finally {
